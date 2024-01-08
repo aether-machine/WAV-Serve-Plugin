@@ -1,0 +1,106 @@
+<?php
+/*
+Plugin Name: WAV Serve Plugin
+Description: Serve WAV files through a custom script.
+Version: 1.0
+Author: Mark Burton
+*/
+
+// Plugin initialization
+add_action('init', 'serve_wav_file_on_init');
+function serve_wav_file_on_init() {
+    // Check if the 'file' and 'token' parameters are present in the GET request
+    if (isset($_GET['file']) && isset($_GET['token'])) {
+        serve_wav_file();
+    }
+}
+
+function serve_wav_file() {
+    $requested_file = sanitize_text_field($_GET['file']);
+    $request_token = sanitize_text_field($_GET['token']);
+    
+    $upload_dir = wp_upload_dir();
+    $base_directory = $upload_dir['basedir'];
+    $file_path = $base_directory . '/' . $requested_file;
+
+    // Log relevant information for debugging
+    error_log('Requested File: ' . $requested_file);
+    error_log('File Path: ' . $file_path);
+
+    // Check if the file exists and is a regular file
+    if (is_file($file_path) && file_exists($file_path) && strpos($file_path, $base_directory) === 0) {
+        error_log('Access conditions met');
+        $stored_token = get_option('wav_serve_token', '');
+        error_log('Stored Token: ' . $stored_token);
+        error_log('Request Token: ' . $request_token);
+
+        // Check if the request has a valid token
+        if (!empty($request_token) && hash_equals($stored_token, $request_token)) {
+            error_log('Token conditions met');
+            // Clear output buffering
+            while (ob_get_level() > 0) {
+                ob_end_clean();
+            }
+
+            // Serve the file
+            header('Content-Type: audio/wav');
+            header('Content-Disposition: inline; filename="' . basename($file_path) . '"');
+            header('Content-Length: ' . filesize($file_path));
+            header('Accept-Ranges: bytes');
+            
+            readfile_chunked($file_path);
+            exit;
+        } else {
+            error_log('Token conditions not met: Invalid token');
+            wp_die('Access denied. Invalid token.', 'Access Denied', array( 'response' => 403 ));
+        }
+    } else {
+        error_log('Access conditions not met: File does not exist or is not a regular file.');
+        wp_die('File not found.', 'File Not Found', array( 'response' => 404 ));
+    }
+}
+
+function readfile_chunked($filename, $retbytes = TRUE) {
+    $chunksize = 1 * (1024 * 1024); // How many bytes per chunk (1 MB)
+    $buffer = '';
+    $cnt = 0;
+    $handle = fopen($filename, 'rb');
+
+    if ($handle === false) {
+        return false;
+    }
+
+    while (!feof($handle)) {
+        $buffer = fread($handle, $chunksize);
+        echo $buffer;
+        ob_flush();
+        flush();
+        if ($retbytes) {
+            $cnt += strlen($buffer);
+        }
+    }
+
+    $status = fclose($handle);
+
+    if ($retbytes && $status) {
+        return $cnt; // Return number of bytes delivered like readfile() does
+    }
+
+    return $status;
+}
+
+// Handle the activation and deactivation hooks:
+register_activation_hook(__FILE__, 'activate_wav_serve_plugin');
+function activate_wav_serve_plugin() {
+    // Activation code
+    error_log('WAV Serve Plugin activated');
+    $token = wp_generate_password(32, true, true);
+    update_option('wav_serve_token', $token);
+}
+
+register_deactivation_hook(__FILE__, 'deactivate_wav_serve_plugin');
+function deactivate_wav_serve_plugin() {
+    // Deactivation code
+    error_log('WAV Serve Plugin deactivated');
+    delete_option('wav_serve_token');
+}
