@@ -1,4 +1,4 @@
-Our in house WordPress extension for streaming audio without exposing the links to easy download by unscrupulous third parties. NGINX config is not that easy to change unless the files are in a WooCommerce download folder.
+Our in house WordPress extension for streaming audio without exposing the links to easy download by unscrupulous third parties. NGINX config is not that easy to change unless the files are in a WooCommerce download folder which is the tpyical way to control access.
 
 To use, set the permissions of your wav files to disallow read by public, you can do this with any FTP client.
 
